@@ -4,6 +4,6 @@ public interface ITransaction : IDisposable
 {
     Guid TransactionId { get; }
     decimal Amount { get; }
-    DateTime TimeStamp { get; }
+    DateTime Timestamp { get; }
     string Description { get; }
 }
