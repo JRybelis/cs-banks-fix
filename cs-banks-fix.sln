@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BankAccount.Core", "BankAccount.Core\BankAccount.Core.csproj", "{57BC815E-7C05-4416-A7BC-E64E1AC440E0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BankAccount.Core", "BankAccount.Core\BankAccount.Core.csproj", "{BF8E027D-4E6E-45BD-8D07-F6AB7D8AB621}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -12,5 +12,9 @@ Global
 		{57BC815E-7C05-4416-A7BC-E64E1AC440E0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{57BC815E-7C05-4416-A7BC-E64E1AC440E0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{57BC815E-7C05-4416-A7BC-E64E1AC440E0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BF8E027D-4E6E-45BD-8D07-F6AB7D8AB621}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BF8E027D-4E6E-45BD-8D07-F6AB7D8AB621}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BF8E027D-4E6E-45BD-8D07-F6AB7D8AB621}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BF8E027D-4E6E-45BD-8D07-F6AB7D8AB621}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
