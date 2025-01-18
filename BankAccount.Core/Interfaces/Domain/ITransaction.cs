@@ -1,4 +1,4 @@
-namespace BankAccount.Core.Interfaces;
+namespace BankAccount.Core.Interfaces.Domain;
 
 public interface ITransaction : IDisposable
 {
