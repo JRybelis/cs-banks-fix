@@ -32,4 +32,11 @@ public static class AccountConstants
         public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(90);
         public static readonly TimeSpan ExtendedTimeout = TimeSpan.FromMinutes(5);
     }
+
+    public static class EventNames
+    {
+        public const string BalanceChanged = nameof(BalanceChanged);
+        public const string TransactionCompleted = nameof(TransactionCompleted);
+        public const string AccountClosed = nameof(AccountClosed);
+    }
 }
