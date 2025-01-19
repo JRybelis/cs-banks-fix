@@ -3,11 +3,11 @@
         xmlns:vm="using:BankAccountApp.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
         x:Class="BankAccountApp.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="BankAccountApp">
+        Title="Bank Account Manager">
 
     <Design.DataContext>
         <!-- This only sets the DataContext for the previewer in an IDE,
@@ -39,20 +39,20 @@
             
             <WrapPanel Margin="0,10">
                 <Button Content="Deposit to Checking"
-                        Command="{Binding DepositToCheckingCommand}"/>
+                        Command="{CompiledBinding DepositToCheckingCommand}"/>
                 <Button Content="Withdraw from Checking"
-                        Command="{Binding WithdrawFromCheckingCommand}"/>
+                        Command="{CompiledBinding WithdrawFromCheckingCommand}"/>
             </WrapPanel>
             
             <WrapPanel Margin="0,0,0,10">
                 <Button Content="Deposit to Savings"
-                        Command="{Binding DepositToSavingsCommand}"/>
+                        Command="{CompiledBinding DepositToSavingsCommand}"/>
                 <Button Content="Withdraw from Savings"
-                        Command="{Binding WithdrawFromSavingsCommand}"/>
+                        Command="{CompiledBinding WithdrawFromSavingsCommand}"/>
             </WrapPanel>
             
             <Button Content="Calculate Interest (Savings)"
-                    Command="{Binding CalculateInterestCommand}"
+                    Command="{CompiledBinding CalculateInterestCommand}"
                     Width="200"
                     HorizontalAlignment="Left"/>
         </StackPanel>
@@ -65,7 +65,7 @@
         <Border Grid.Row="3"
                 BorderBrush="Gray"
                 BorderThickness="1">
-            <ListBox ItemsSource="{Binding TransactionLog}"
+            <ListBox ItemsSource="{CompiledBinding TransactionLog}"
                      Background="Transparent"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"/>
         </Border>

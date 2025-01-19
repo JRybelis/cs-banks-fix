@@ -1,7 +1,12 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+﻿using Avalonia.ReactiveUI;
+using ReactiveUI;
 
 namespace BankAccountApp.ViewModels;
 
-public class ViewModelBase : ObservableObject
+public class ViewModelBase : ReactiveObject
 {
+    protected ViewModelBase()
+    {
+        RxApp.MainThreadScheduler = AvaloniaScheduler.Instance;
+    }
 }
