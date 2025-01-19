@@ -15,6 +15,59 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Account Information -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="Bank Accounts" FontSize="24" FontWeight="Bold"/>
+            <TextBlock Text="{Binding CheckingBalance}" Margin="0,10,0,0"/>
+            <TextBlock Text="{Binding SavingsBalance}" Margin="0,5,0,0"/>
+        </StackPanel>
 
+        <!-- Transaction Controls -->
+        <StackPanel Grid.Row="1" Spacing="10">
+            <TextBox Text="{Binding Amount}"
+                     Watermark="Enter amount"
+                     Width="200"
+                     HorizontalAlignment="Left"/>
+            
+            <WrapPanel Margin="0,10">
+                <Button Content="Deposit to Checking"
+                        Command="{Binding DepositToCheckingCommand}"/>
+                <Button Content="Withdraw from Checking"
+                        Command="{Binding WithdrawFromCheckingCommand}"/>
+            </WrapPanel>
+            
+            <WrapPanel Margin="0,0,0,10">
+                <Button Content="Deposit to Savings"
+                        Command="{Binding DepositToSavingsCommand}"/>
+                <Button Content="Withdraw from Savings"
+                        Command="{Binding WithdrawFromSavingsCommand}"/>
+            </WrapPanel>
+            
+            <Button Content="Calculate Interest (Savings)"
+                    Command="{Binding CalculateInterestCommand}"
+                    Width="200"
+                    HorizontalAlignment="Left"/>
+        </StackPanel>
+        
+        <!-- Transaction Log -->
+        <TextBlock Grid.Row="2"
+                   Text="Transaction Log"
+                   FontWeight="Bold"
+                   Margin="0,20,0,5"/>
+        <Border Grid.Row="3"
+                BorderBrush="Gray"
+                BorderThickness="1">
+            <ListBox ItemsSource="{Binding TransactionLog}"
+                     Background="Transparent"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+        </Border>
+    </Grid>
 </Window>
