@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Reactive;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using BankAccount.Core.Domain;
@@ -55,24 +56,20 @@ public class MainWindowViewModel : ViewModelBase
         if (_savingsAccount is IAccountEventPublisher savingsEvents)
             savingsEvents.BalanceChanged += OnAccountBalanceChanged;
 
-        // Validate amount input
+        // Validate amount input with explicit threading
         var canExecuteTransaction = this.WhenAnyValue(
             vm => vm.Amount,
-            amount => !string.IsNullOrWhiteSpace(amount) 
-                      && decimal.TryParse(amount, out var parsedAmount) 
-                      && parsedAmount > 0);
+            amount => !string.IsNullOrWhiteSpace(amount) && 
+                      decimal.TryParse(amount, out var parsedAmount) &&
+                      parsedAmount > 0)
+            .ObserveOn(RxApp.MainThreadScheduler);
 
         // Create commands with explicit thread marshalling
-        DepositToCheckingCommand = ReactiveCommand.CreateFromTask(
-            DepositToChecking, canExecuteTransaction);
-        WithdrawFromCheckingCommand = ReactiveCommand.CreateFromTask(
-            WithdrawFromChecking, canExecuteTransaction);
-        DepositToSavingsCommand = ReactiveCommand.CreateFromTask(
-            DepositToSavings, canExecuteTransaction);
-        WithdrawFromSavingsCommand = ReactiveCommand.CreateFromTask(
-            WithdrawFromSavings, canExecuteTransaction);
-        CalculateInterestCommand = ReactiveCommand.CreateFromTask(
-            CalculateInterest, canExecuteTransaction);
+        DepositToCheckingCommand = ReactiveCommand.CreateFromTask(DepositToChecking, canExecuteTransaction);
+        WithdrawFromCheckingCommand = ReactiveCommand.CreateFromTask(WithdrawFromChecking, canExecuteTransaction);
+        DepositToSavingsCommand = ReactiveCommand.CreateFromTask(DepositToSavings, canExecuteTransaction);
+        WithdrawFromSavingsCommand = ReactiveCommand.CreateFromTask(WithdrawFromSavings, canExecuteTransaction);
+        CalculateInterestCommand = ReactiveCommand.CreateFromTask(CalculateInterest, canExecuteTransaction);
 
         UpdateAccountInfo();
     }
@@ -81,24 +78,80 @@ public class MainWindowViewModel : ViewModelBase
     {
         await HandleTransaction(amount => _checkingAccount.DepositAsync(amount), 
             "Deposited to Checking account.");
+        UpdateAccountInfo(); // Refresh the balance display
     }
 
     private async Task WithdrawFromChecking()
     {
         await HandleTransaction(amount => _checkingAccount.WithdrawAsync(amount), 
             "Withdrawn from Checking account.");
+        UpdateAccountInfo(); // Refresh the balance display
     }
 
     private async Task DepositToSavings()
     {
         await HandleTransaction(amount => _savingsAccount.DepositAsync(amount), 
             "Deposited to Savings account.");
+        UpdateAccountInfo(); // Refresh the balance display
     }
 
     private async Task WithdrawFromSavings()
     {
         await HandleTransaction(amount => _savingsAccount.WithdrawAsync(amount), 
             "Withdrawn from Savings account.");
+        UpdateAccountInfo(); // Refresh the balance display
+    }
+    
+    private async Task CalculateInterest()
+    {
+        if (_savingsAccount is SavingsAccount savings)
+        {
+            await HandleTransaction(
+                async () =>
+                {
+                    await savings.CalculateAndApplyInterestAsync();
+                    UpdateAccountInfo(); // Refresh the balance display
+                },
+                "Interest Calculated for Savings Account."
+            );
+        }
+    }
+
+    /// <summary>
+    /// Handles various types of account transactions with built-in error handling and UI thread synchronization.
+    /// </summary>
+    /// <param name="transactionAction">The async transaction to perform.
+    /// Can be a deposit, withdrawal, or other account operation.</param>
+    /// <param name="successMessage">An optional message to log when the transaction succeeds.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task HandleTransaction(Func<Task> transactionAction, string? successMessage = null)
+    {
+        try
+        {
+            await transactionAction();
+            
+            // If a success message is provided, log it on the UI thread
+            if (!string.IsNullOrWhiteSpace(successMessage))
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    LogTransaction(successMessage);
+
+                    // Clear the amount if it's a transaction that uses the Amount property
+                    if (decimal.TryParse(Amount, out _))
+                    {
+                        Amount = string.Empty;
+                    }
+                });
+            }
+        }
+        catch (Exception e)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                LogTransaction($"Error: {e.Message}");
+            });
+        }
     }
     
     private async Task HandleTransaction(Func<decimal, Task<ITransaction>> operation, string description)
@@ -106,47 +159,8 @@ public class MainWindowViewModel : ViewModelBase
         if (!decimal.TryParse(Amount, out var amount))
             return;
         
-        try
-        {
-            await operation(amount);
-            
-            // Ensure UI updates happen on UI thread
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                LogTransaction($"{description}: {amount:C}.");
-                Amount = string.Empty;
-            });
-        }
-        catch (Exception e)
-        {
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                LogTransaction($"Error: {e.Message}.");
-            });
-        }
-    }
-
-    private async Task CalculateInterest()
-    {
-        if (_savingsAccount is SavingsAccount savings)
-        {
-            try
-            {
-                await savings.CalculateAndApplyInterestAsync();
-                
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    LogTransaction("Interest Calculated for Savings Account.");
-                });
-            }
-            catch (Exception e)
-            {
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    LogTransaction($"Error calculating interest for Savings Account: {e.Message}.");
-                });
-            }
-        }
+        // Use the overloaded HandleTransaction method to wrap the operation
+        await HandleTransaction(async () => await operation(amount), $"{description}: {amount:C}");
     }
 
     private void OnAccountBalanceChanged(object? sender, EventArgs e)
