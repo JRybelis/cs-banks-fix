@@ -5,7 +5,8 @@ namespace BankAccount.Core.Domain;
 
 public class SavingsAccount : BankAccountBase, IInterestBearing
 {
-    private readonly SemaphoreSlim _interestLock = new SemaphoreSlim(1, 1);
+    private readonly SemaphoreSlim _interestLock = new(1, 1);
+    private readonly object _savingsAccountLock = new();
     
     public decimal InterestRate { get; }
     
@@ -17,27 +18,33 @@ public class SavingsAccount : BankAccountBase, IInterestBearing
         InterestRate = interestRate;
     }
 
+    protected override object GetBalanceLock() => _savingsAccountLock;
+    
     public async Task<ITransaction> CalculateAndApplyInterestAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         await _interestLock.WaitAsync(cancellationToken);
         try
         {
-            decimal interestAmount;
-            lock (BalanceLock)
-            {
-                interestAmount = balance * (InterestRate / 100);
-            }
+            var currentBalance = await GetBalanceAsync();
+            var  interestAmount = currentBalance * (InterestRate / 100);
 
             var transaction = new Transaction(interestAmount, AccountConstants.TransactionTypes.Interest);
             await ProcessDepositAsync(transaction);
 
+            OnTransactionCompleted(transaction);
             return transaction;
         }
         finally
         {
             _interestLock.Release();
         }
+    }
+    
+    protected override async Task<bool> CanWithdrawAsync(decimal amount)
+    {
+        var currentBalance = await GetBalanceAsync();
+        return currentBalance >= amount;
     }
 
     protected override void Dispose(bool disposing)

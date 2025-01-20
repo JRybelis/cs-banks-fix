@@ -8,17 +8,16 @@ using BankAccount.Core.Interfaces.Events;
 
 namespace BankAccount.Core.Domain;
 
-public class BankAccountBase : IAccount, IAccountEventPublisher
+public abstract class BankAccountBase : IAccount, IAccountEventPublisher
 {
-    protected readonly object BalanceLock = new();
+    private bool _disposed;
+    private decimal _balance;
     private readonly SemaphoreSlim _asyncLock = new(1, 1);
     private readonly ConcurrentQueue<ITransaction> _transactionHistory;
 
     public event EventHandler<TransactionEventArgs>? TransactionCompleted;
     public event EventHandler<AccountEventArgs>? AccountClosed;
     public event EventHandler<AccountEventArgs>? BalanceChanged;
-    private bool _disposed;
-    protected decimal balance;
     
     public Guid AccountId { get; }
     public string AccountHolder { get; }
@@ -27,9 +26,18 @@ public class BankAccountBase : IAccount, IAccountEventPublisher
         get
         {
             ThrowIfDisposed();
-            lock (BalanceLock)
+            lock (GetBalanceLock())
             {
-                return balance;
+                return _balance;
+            }
+        }
+        private set
+        {
+            lock (GetBalanceLock())
+            {
+                if (_balance == value) return;
+                _balance = value;
+                OnBalanceChanged();
             }
         }
     }
@@ -39,6 +47,34 @@ public class BankAccountBase : IAccount, IAccountEventPublisher
         AccountHolder = accountHolder ?? throw new ArgumentNullException(nameof(accountHolder));
         AccountId = Guid.NewGuid();
         _transactionHistory = new ConcurrentQueue<ITransaction>();
+    }
+    
+    protected abstract object GetBalanceLock();
+
+    protected async Task<decimal> GetBalanceAsync()
+    {
+        ThrowIfDisposed();
+        return await Task.Run(() =>
+        {
+            lock (GetBalanceLock())
+            {
+                return _balance;
+            }
+        });
+    }
+    
+    protected async Task SetBalanceAsync(decimal newBalance)
+    {
+        ThrowIfDisposed();
+        await Task.Run(() =>
+        {
+            lock (GetBalanceLock())
+            {
+                if (_balance == newBalance) return;
+                _balance = newBalance;
+                OnBalanceChanged();
+            }
+        });
     }
     
     public virtual async Task<ITransaction> DepositAsync(decimal amount, CancellationToken cancellationToken = default)
@@ -64,6 +100,48 @@ public class BankAccountBase : IAccount, IAccountEventPublisher
             _asyncLock.Release();   
         }
     }
+    
+    public virtual async Task<ITransaction> WithdrawAsync(decimal amount, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        if (amount <= 0) throw new InvalidTransactionException(AccountConstants.ValidationMessages.InvalidAmount);
+        
+        await _asyncLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (!await CanWithdrawAsync(amount))
+                throw new InsufficientFundsException(amount, await GetBalanceAsync());
+            
+            var transaction = new Transaction(-amount, AccountConstants.TransactionTypes.Withdrawal);
+            await ProcessWithdrawalAsync(transaction);
+            _transactionHistory.Enqueue(transaction);
+            
+            OnTransactionCompleted(transaction);
+            return transaction;
+        }
+        finally
+        {
+            _asyncLock.Release();
+        }
+    }
+    
+    protected virtual async Task ProcessDepositAsync(ITransaction transaction)
+    {
+        var currentBalance = await GetBalanceAsync();
+        await SetBalanceAsync(currentBalance + transaction.Amount);
+    }
+
+    protected virtual async Task ProcessWithdrawalAsync(ITransaction transaction)
+    {
+        var currentBalance = await GetBalanceAsync();
+        await SetBalanceAsync(currentBalance + transaction.Amount); // transaction.Amount is already negative
+    }
+    
+    protected virtual async Task<bool> CanWithdrawAsync(decimal amount)
+    {
+        var currentBalance = await GetBalanceAsync();
+        return currentBalance >= amount;
+    }
 
     protected void OnBalanceChanged()
     {
@@ -84,65 +162,10 @@ public class BankAccountBase : IAccount, IAccountEventPublisher
             transaction.Description));
     }
 
-    public virtual async Task<ITransaction> WithdrawAsync(decimal amount, CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        if (amount <= 0) throw new InvalidTransactionException("Amount cannot be zero or negative.");
-        
-        await _asyncLock.WaitAsync(cancellationToken);
-        try
-        {
-            if (!await CanWithdrawAsync(amount))
-                throw new InsufficientFundsException(amount, Balance);
-            
-            var transaction = new Transaction(-amount, AccountConstants.TransactionTypes.Withdrawal);
-            await ProcessWithdrawalAsync(transaction);
-            _transactionHistory.Enqueue(transaction);
-            return transaction;
-        }
-        finally
-        {
-            _asyncLock.Release();
-        }
-    }
-
     public IEnumerable<ITransaction> GetTransactionHistory()
     {
         ThrowIfDisposed();
         return _transactionHistory.ToArray();
-    }
-
-    protected virtual async Task ProcessDepositAsync(ITransaction transaction)
-    {
-        await Task.Run(() =>
-        {
-            lock (BalanceLock)
-            {
-                balance += transaction.Amount;
-            }
-        });
-    }
-
-    protected virtual async Task ProcessWithdrawalAsync(ITransaction transaction)
-    {
-        await Task.Run(() =>
-        {
-            lock (BalanceLock)
-            {
-                balance += transaction.Amount; // Amount is already negative
-            }
-        });
-    }
-
-    protected virtual async Task<bool> CanWithdrawAsync(decimal amount)
-    {
-        return await Task.Run(() =>
-        {
-            lock (BalanceLock)
-            {
-                return balance >= amount;
-            }
-        });
     }
     
     public void Dispose()
