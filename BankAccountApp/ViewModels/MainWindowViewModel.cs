@@ -18,6 +18,20 @@ public class MainWindowViewModel : ViewModelBase
     private string _amount = string.Empty;
     private string _checkingBalance = string.Empty;
     private string _savingsBalance = string.Empty;
+    private decimal _savingsAccountCurrentBalance;
+    
+    public decimal SavingsAccountCurrentBalance
+    {
+        get
+        {
+            var balance = _savingsAccount.Balance;
+            return balance;
+        }
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _savingsAccountCurrentBalance, value);
+        }
+    }
 
     public ObservableCollection<string> TransactionLog { get; } = new();
 
@@ -47,14 +61,17 @@ public class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel(IAccount checkingAccount, IAccount savingsAccount)
     {
-        _checkingAccount = checkingAccount;
-        _savingsAccount = savingsAccount;
+        _checkingAccount = checkingAccount ?? throw new ArgumentNullException(nameof(checkingAccount));
+        _savingsAccount = savingsAccount ?? throw new ArgumentNullException(nameof(savingsAccount));
 
         // Subscribe to balance change events
-        if (_checkingAccount is IAccountEventPublisher checkingEvents)
-            checkingEvents.BalanceChanged += OnAccountBalanceChanged;
-        if (_savingsAccount is IAccountEventPublisher savingsEvents)
-            savingsEvents.BalanceChanged += OnAccountBalanceChanged;
+        if (_checkingAccount is IAccountEventPublisher checkingEvents) checkingEvents.BalanceChanged += OnAccountBalanceChanged;
+        if (_savingsAccount is IAccountEventPublisher savingsEvents) savingsEvents.BalanceChanged += OnAccountBalanceChanged;
+
+        _ = UpdateAccountInfoAsync();
+        
+        this.WhenAnyValue(x => x.SavingsAccountCurrentBalance)
+            .Subscribe(_ => this.RaisePropertyChanged(nameof(SavingsAccountCurrentBalance)));
 
         // Validate amount input with explicit threading
         var canExecuteTransaction = this.WhenAnyValue(
@@ -64,57 +81,59 @@ public class MainWindowViewModel : ViewModelBase
                       parsedAmount > 0)
             .ObserveOn(RxApp.MainThreadScheduler);
 
-        // Create commands with explicit thread marshalling
         DepositToCheckingCommand = ReactiveCommand.CreateFromTask(DepositToChecking, canExecuteTransaction);
         WithdrawFromCheckingCommand = ReactiveCommand.CreateFromTask(WithdrawFromChecking, canExecuteTransaction);
         DepositToSavingsCommand = ReactiveCommand.CreateFromTask(DepositToSavings, canExecuteTransaction);
         WithdrawFromSavingsCommand = ReactiveCommand.CreateFromTask(WithdrawFromSavings, canExecuteTransaction);
-        CalculateInterestCommand = ReactiveCommand.CreateFromTask(CalculateInterest, canExecuteTransaction);
+        CalculateInterestCommand = ReactiveCommand.CreateFromTask(CalculateInterest, 
+            this.WhenAnyValue(
+                vm => vm.Amount,             
+                vm => vm.SavingsAccountCurrentBalance,     
+                (amount, balance) => 
+                {
+                    // Validate amount input
+                    var isAmountInvalid = string.IsNullOrWhiteSpace(amount) || 
+                                          !decimal.TryParse(amount, out _);
 
-        UpdateAccountInfo();
+                    // Return true if balance is positive and amount is empty or invalid
+                    return balance > 0 && isAmountInvalid;
+                }
+            )
+        );
     }
 
     private async Task DepositToChecking()
     {
         await HandleTransaction(amount => _checkingAccount.DepositAsync(amount), 
             "Deposited to Checking account.");
-        UpdateAccountInfo(); // Refresh the balance display
     }
 
     private async Task WithdrawFromChecking()
     {
         await HandleTransaction(amount => _checkingAccount.WithdrawAsync(amount), 
             "Withdrawn from Checking account.");
-        UpdateAccountInfo(); // Refresh the balance display
     }
 
     private async Task DepositToSavings()
     {
         await HandleTransaction(amount => _savingsAccount.DepositAsync(amount), 
             "Deposited to Savings account.");
-        UpdateAccountInfo(); // Refresh the balance display
     }
 
     private async Task WithdrawFromSavings()
     {
         await HandleTransaction(amount => _savingsAccount.WithdrawAsync(amount), 
             "Withdrawn from Savings account.");
-        UpdateAccountInfo(); // Refresh the balance display
     }
     
     private async Task CalculateInterest()
     {
-        if (_savingsAccount is SavingsAccount savings)
-        {
-            await HandleTransaction(
-                async () =>
-                {
-                    await savings.CalculateAndApplyInterestAsync();
-                    UpdateAccountInfo(); // Refresh the balance display
-                },
-                "Interest Calculated for Savings Account."
-            );
-        }
+        if (_savingsAccount is not SavingsAccount savings)
+            return;
+        
+        await HandleTransaction(
+            async () => await savings.CalculateAndApplyInterestAsync(),
+            "Interest calculated and applied to savings account.");
     }
 
     /// <summary>
@@ -129,7 +148,7 @@ public class MainWindowViewModel : ViewModelBase
         try
         {
             await transactionAction();
-            
+
             // If a success message is provided, log it on the UI thread
             if (!string.IsNullOrWhiteSpace(successMessage))
             {
@@ -163,15 +182,19 @@ public class MainWindowViewModel : ViewModelBase
         await HandleTransaction(async () => await operation(amount), $"{description}: {amount:C}");
     }
 
-    private void OnAccountBalanceChanged(object? sender, EventArgs e)
+    private async void OnAccountBalanceChanged(object? sender, EventArgs e)
     {
-        Dispatcher.UIThread.Post(UpdateAccountInfo);
+        await UpdateAccountInfoAsync();
     }
 
-    private void UpdateAccountInfo()
+    private async Task UpdateAccountInfoAsync()
     {
-        CheckingBalance = $"Checking Account: {_checkingAccount.AccountHolder}, Balance: {_checkingAccount.Balance:C}.";
-        SavingsBalance = $"Savings Account: {_savingsAccount.AccountHolder}, Balance: {_savingsAccount.Balance:C}.";
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            CheckingBalance = $"Checking Account: {_checkingAccount.AccountHolder}, Balance: {_checkingAccount.Balance:C}.";
+            SavingsBalance = $"Savings Account: {_savingsAccount.AccountHolder}, Balance: {_savingsAccount.Balance:C}.";
+            SavingsAccountCurrentBalance = _savingsAccount.Balance;
+        });
     }
 
     private void LogTransaction(string message)
