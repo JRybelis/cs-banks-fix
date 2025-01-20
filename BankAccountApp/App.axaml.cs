@@ -6,6 +6,7 @@ using Avalonia.Markup.Xaml;
 using BankAccountApp.ViewModels;
 using BankAccountApp.Views;
 using BankAccount.Core.Domain.Enums;
+using BankAccount.Core.Interfaces.Domain;
 using BankAccountBase.Core.Factories;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,14 +25,20 @@ public partial class App : Application
         {
             var services = new ServiceCollection();
             
-            // Register services
-            services.AddSingleton(AccountFactory.CreateAccount(
-                AccountType.Checking, "Alice", 500m));
-            services.AddSingleton(AccountFactory.CreateAccount(
-                AccountType.Savings, "Bob", 5m));
+            // Create distinct accounts, first
+            var checkingAccount = AccountFactory.CreateAccount(
+                AccountType.Checking, "Alice", 500m);
+            var savingsAccount = AccountFactory.CreateAccount(
+                AccountType.Savings, "Bob", 5m);
+
+            // Register services with explicit types
+            services.AddSingleton<IAccount>(serviceProvider  => checkingAccount);
+            services.AddSingleton<IAccount>(serviceProvider  => savingsAccount);
             
-            // Register ViewModels
-            services.AddSingleton<MainWindowViewModel>();
+            // Register ViewModel with named dependencies 
+            services.AddSingleton(serviceProvider => new MainWindowViewModel(
+                checkingAccount, savingsAccount));
+                
             
             var serviceProvider = services.BuildServiceProvider();
             
