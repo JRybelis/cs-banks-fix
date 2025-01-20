@@ -38,7 +38,8 @@ The minimal expected effort is to add locking primitives to guarantee accurate d
 withdrawals. Optional: interest calculations for the saving accounts. 
 
 The mid-effort is to write a GUI client with the buttons for Deposit and Withdraw 
-using one of the methodologies listed above: WinForms, WPF, UWP or MAUI. 
+using one of the methodologies listed above: WinForms, WPF, UWP or MAUI. `used Avalonia UI, as MAUI was not accessible
+on my Linux distro.` https://docs.avaloniaui.net/docs/get-started/install
 
 The maximum is to write a Dockerfile that deploys the program within a container, running Alpine  
 Linux and .NET core console program in the command line.  
